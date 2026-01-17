@@ -42,7 +42,9 @@ def cosine_similarity(vec1, vec2):
     return np.dot(vec1,vec2)/(np.linalg.norm(vec1)*np.linalg.norm(vec2))
 
 def semantic_chunk(text,chunksize,overlap):
+    text = text.strip()
     lines = re.split(r"(?<=[.!?])\s+",text)
+    lines = [line.strip() for line in lines if line.strip()]
     return list_chunk_overlap(lines,chunksize,overlap)
 
 def chunk(text,chunksize,overlap):
