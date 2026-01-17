@@ -177,8 +177,6 @@ class ChunkedSemanticSearch(SemanticSearch):
                                MOVIE_IDX: self.chunk_metadata[i][MOVIE_IDX],
                                SCORE: cosine_sim}
     
-            if re.search("Logan",self.documents[self.chunk_metadata[i][MOVIE_IDX]][TITLE]):
-                print(f"Found match for Logan at chunk {i} {this_chunk_score}")
             chunk_scores.append(this_chunk_score)
 
         # Find the movie with the most well matched chunks.
