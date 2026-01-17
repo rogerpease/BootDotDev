@@ -1,22 +1,30 @@
-
 import numpy as np
-import re 
+import re
 import json
-
-from sentence_transformers import SentenceTransformer
 import os
 
-rootdir = os.path.join(os.path.dirname(__file__),"..","..") 
-embeddingsfilepathname = os.path.join(rootdir,"cache/movie_embeddings.npy")
-chunk_embeddings_filepathname = os.path.join(rootdir,"cache/chunk_embeddings.npy")
-chunk_metadata_filepathname = os.path.join(rootdir,"cache/chunk_metadata.json")
+from sentence_transformers import SentenceTransformer
 
+rootdir = os.path.join(os.path.dirname(__file__),"..","..")
+cache_dir = os.path.join(rootdir,'cache')
+
+embeddings_filepathname = os.path.join(cache_dir, "movie_embeddings.npy")
+chunk_embeddings_filepathname = os.path.join(cache_dir,"chunk_embeddings.npy")
+chunk_metadata_filepathname = os.path.join(cache_dir,"chunk_metadata.json")
+
+CHUNKS="chunks"
+MOVIE_IDX='movie_idx'
+CHUNK_IDX='chunk_idx'
+TOTAL_CHUNKS='total_chunks'
+SCORE='score'
 ID='id'
+TITLE='title'
 DESCRIPTION='description'
+SCORE_PRECISION=2
+DOCUMENTS_PREVIEW_LENGTH=100
 
 def list_chunk_overlap(mylist,chunksize,overlap):
-    resultchunks = [] 
-
+    resultchunks = []
     numitems = len(mylist)
 
     for start_i in range(0,numitems,chunksize-overlap):
@@ -27,76 +35,83 @@ def list_chunk_overlap(mylist,chunksize,overlap):
               thischunk.append(mylist[thisitem_i]) 
        if len(thischunk) > overlap: 
          resultchunks.append(thischunk)   
-
+    
     return resultchunks
- 
-def cosine_similarity(vec1, vec2):
-    dot_product = np.dot(vec1, vec2)
 
+def cosine_similarity(vec1, vec2):
+    return np.dot(vec1,vec2)/(np.linalg.norm(vec1)*np.linalg.norm(vec2))
 
 def semantic_chunk(text,chunksize,overlap):
-    lines = re.split(r"(?<=[.!?])\s+",text) 
+    lines = re.split(r"(?<=[.!?])\s+",text)
     return list_chunk_overlap(lines,chunksize,overlap)
-
 
 def chunk(text,chunksize,overlap):
     mytextsplit = text.split()
     return list_chunk_overlap(mytextsplit,chunksize,overlap)
- 
-def cosine_similarity(vec1, vec2):
-    dot_product = np.dot(vec1, vec2)
-    norm1 = np.linalg.norm(vec1)
-    norm2 = np.linalg.norm(vec2)
 
-    if norm1 == 0 or norm2 == 0:
-        return 0.0
+class SemanticSearch:
 
-    return dot_product / (norm1 * norm2)
+    def __init__(self,model_name):
+        # Load the model (downloads automatically the first time)
+        self.model = SentenceTransformer(model_name)
+        self.document_embeddings = None
+        self.documents = None
 
-class SemanticSearch():
+    def verify_model(self):
+        print(f"Model loaded: {self.model}")
+        print(f"Max sequence length: {self.model.max_seq_length}")
+    
+    def generate_embedding(self,text):
+        embedding = self.model.encode([text])[0]
+        return embedding
 
-   def __init__(self,model_name):
-      # Load the model (downloads automatically the first time)
-      self.model = SentenceTransformer(model_name)
-      self.embeddings = None 
-      self.documents = None 
-      self.document_map = {}
+    def build_embeddings(self,documents):
 
-   def verify_model(self):
-      print(f"Model loaded: {self.model}")
-      print(f"Max sequence length: {self.model.max_seq_length}")
+        self.documents = documents
 
-   def generate_embedding(self,text):
-      embedding = self.model.encode(text) 
-      return embedding      
+        documents_to_encode_list = []
 
-   def build_embeddings(self,documents):
-      self.documents = documents 
-      docs_to_encode_list = [] 
-      for doc in documents:
-         self.document_map[int(doc[ID])] =  doc
-         docs_to_encode_list.append(f"{doc['title']}: {doc['description']}")
-      self.embeddings = self.model.encode(docs_to_encode_list,show_progress_bar=True) 
-      np.save(embeddingsfilepathname,self.embeddings)
- 
-         
-   def load_or_create_embeddings(self, documents):
-      if os.path.exists(embeddingsfilepathname):
-          self.embeddings = np.load(embeddingsfilepathname)
-          if len(self.embeddings) == len(documents):
-             return 
-      return self.build_embeddings(documents)          
-  
+        if not os.path.exists(cache_dir):
+            os.mkdir(cache_dir)
 
-   def search(self,query,limit):
-      if self.embeddings is None:
-         raise ValueError("No embeddings loaded. Call `load_or_create_embeddings` first.")
-      query_embedding = self.generate_embedding(query)
-      similarity_list = [] 
-      for id,doc in enumerate(self.embeddings):
-         similarity_list.append((id, cosine_similarity(query_embedding,doc))) 
-      sorted_data = list(reversed(sorted(similarity_list, key=lambda item: item[1])))
-      return sorted_data[0:limit] 
+        for doc in documents:
+           documents_to_encode_list.append(f"{doc[TITLE]}: {doc[DESCRIPTION]}")
+    
+        self.document_embeddings = self.model.encode(documents_to_encode_list, show_progress_bar=True)
+        np.save(embeddings_filepathname, self.document_embeddings)
+
+        return self.document_embeddings
+
+    def load_or_create_embeddings(self, documents):
+        self.documents = documents
+    
+        if os.path.exists(embeddings_filepathname):
+            print("Loading non-chunk Embeddings")
+            self.document_embeddings = np.load(embeddings_filepathname)
+
+            if len(self.document_embeddings) == len(documents):
+                print("Loaded non-chunk Embeddings")
+                return self.document_embeddings
+
+        print("Building non-chunk Embeddings")
+        return self.build_embeddings(documents)
+
+
+    def search(self,query,limit):
+
+        if self.document_embeddings is None:
+            raise ValueError("No embeddings loaded. Call `load_or_create_embeddings` first.")
+
+        query_embedding = self.generate_embedding(query)
+        similarity_list = []
+    
+        for id,doc in enumerate(self.document_embeddings):
+           print(query_embedding)
+           print(self.document_embeddings[id])
+           similarity_list.append((id, cosine_similarity(query_embedding, self.document_embeddings[id])))
+
+        sorted_data = list(reversed(sorted(similarity_list, key=lambda item: item[1])))
+        return sorted_data[0:limit]
 
 class ChunkedSemanticSearch(SemanticSearch):
 
@@ -104,6 +119,8 @@ class ChunkedSemanticSearch(SemanticSearch):
         super().__init__(model_name)
         self.chunk_embeddings = None
         self.chunk_metadata = None
+
+
 
     def build_chunk_embeddings(self, documents):
         self.build_embeddings(documents)
