@@ -41,7 +41,7 @@ class InvertedIndex():
         self.docmap = {}
         self.doc_titles = {}
         self.doc_titles_path = os.path.join(CACHE_DIR, "doc_titles.pkl")
-        self.doccount = 1
+        self.doccount = 0
         self.term_frequencies = {}
         self.doc_lengths = {}
         self.doc_lengths_path = os.path.join(CACHE_DIR, "doc_lengths.pkl")
@@ -92,14 +92,15 @@ class InvertedIndex():
         tokens = self.tokenize_text(query)
         scores = {}
         for doc_id in self.docmap:
+            print(doc_id) 
             doctotal = 0
             for token in tokens:
                 bm25 = self.bm25(doc_id, token)
                 doctotal += bm25
             scores[doc_id] = doctotal
 
-        sorted_data = sorted(scores.items(), key=lambda item: item[1])
-        return sorted_data[(-1 * limit):]
+        sorted_data = sorted(scores.items(), key=lambda item: item[1],reverse=True)
+        return sorted_data[0:limit]
 
     def idf(self, token):
         total_doc_count = len(self.docmap)
