@@ -28,9 +28,6 @@ BM25_B = 0.75
 class TokenList(list):
     pass
 
-
-
-
 class InvertedIndex():
 
     def __init__(self,movies):
@@ -52,7 +49,7 @@ class InvertedIndex():
 
     def __add_document(self, doc_id, title, text):
         self.docmap[doc_id] = text
-        tokens = InvertedIndex.tokenize_text(text)
+        tokens = self.tokenize_text(text)
         self.term_frequencies[doc_id] = Counter()
         self.doc_lengths[doc_id] = len(tokens)
         self.doc_titles[doc_id] = title
@@ -92,7 +89,6 @@ class InvertedIndex():
         tokens = self.tokenize_text(query)
         scores = {}
         for doc_id in self.docmap:
-            print(doc_id) 
             doctotal = 0
             for token in tokens:
                 bm25 = self.bm25(doc_id, token)
@@ -136,10 +132,10 @@ class InvertedIndex():
         try:
 
             if not os.path.exists(indexfilename):
-                raise FileNotFoundError("Could not find index.pkl")
+                raise FileNotFoundError("Could not find "+str(indexfilename))
 
             if not os.path.exists(docmapfilename):
-                raise FileNotFoundError("Could not find docmap.pkl")
+                raise FileNotFoundError("Could not find "+str(docmapfilename))
 
             with open(indexfilename, 'rb') as file:
                 self.index = pickleload(file)
@@ -155,7 +151,6 @@ class InvertedIndex():
 
             with open(self.doc_titles_path, 'rb') as file:
                 self.doc_titles = pickleload(file)
-
 
         except Exception as e:
             raise (e)

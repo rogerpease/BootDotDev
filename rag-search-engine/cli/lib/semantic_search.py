@@ -108,8 +108,6 @@ class SemanticSearch:
         similarity_list = []
     
         for id,doc in enumerate(self.document_embeddings):
-           print(query_embedding)
-           print(self.document_embeddings[id])
            similarity_list.append((id, cosine_similarity(query_embedding, self.document_embeddings[id])))
 
         sorted_data = list(reversed(sorted(similarity_list, key=lambda item: item[1])))
@@ -194,6 +192,7 @@ class ChunkedSemanticSearch(SemanticSearch):
     
         top_movies = sorted(movie_idx_to_score.items(), key=lambda x: x[1], reverse=True)
         resultlist = []
+
         for selected_top_movie in top_movies[:limit]:
             movie_idx,score = selected_top_movie
     
