@@ -31,9 +31,12 @@ def main() -> None:
     weighted_search_command.add_argument("--alpha",type=float,help="Alpha parameter for weighted search",default=0.5)
     weighted_search_command.add_argument("--limit",type=int,help="Limit the number of items to return",default=5)
 
-    args = parser.parse_args()
+    rrf_search_command = command_subparser.add_parser("rrf-search")
+    rrf_search_command.add_argument("query",help="Search query")
+    rrf_search_command.add_argument("--k",type=int,help="Number of nearest neighbors to return",default=60)
+    rrf_search_command.add_argument("--limit",type=int,help="Limit the number of items to return",default=5)
 
-    print(args.command)
+    args = parser.parse_args()
 
 
     match args.command:
@@ -51,6 +54,19 @@ def main() -> None:
                 print(str(resultcount)+".",movies()[movie_index]["title"])
                 print("   Hybrid Score: {:.4f}".format(hybrid_score))
                 print("   BM25 Score: {:.4f}".format(bm25score),"Semantic Score {:.4f}".format(semanticscore))
+                print(movies()[movie_index]["description"][0:100])
+
+        case "rrf-search":
+            hs = HybridSearch(movies())
+            results = hs.rrf_search(args.query, k=args.k, limit=args.limit)
+            for resultcount, result in enumerate(results, start=1):
+                movie_index, scores = result
+                bm25score, semanticscore, rrf_score = scores
+                if semanticscore == None:
+                    semanticscore = 0
+                print(str(resultcount) + ".", movies()[movie_index]["title"])
+                print("   RRF_Score: {:.4f}".format(rrf_score))
+                print("   BM25 Score: {:.4f}".format(bm25score), "Semantic Score {:.4f}".format(semanticscore))
                 print(movies()[movie_index]["description"][0:100])
         case _:
             parser.print_help()
