@@ -42,7 +42,7 @@ def main() -> None:
     rrf_search_command.add_argument("--k",type=int,help="Number of nearest neighbors to return",default=60)
     rrf_search_command.add_argument("--limit",type=int,help="Limit the number of items to return",default=5)
 
-    rrf_search_command.add_argument("--enhance",type=str,choices=["spell"],help="Query enhancement method")
+    rrf_search_command.add_argument("--enhance",type=str,choices=["spell","rewrite"],help="Query enhancement method")
 
     args = parser.parse_args()
 
@@ -66,21 +66,48 @@ def main() -> None:
 
         case "rrf-search":
             hs = HybridSearch(movies())
-            ENHANCED_QUERY = args.query
+            QUERY = args.query
+            client = genai.Client(api_key=api_key)
+
             if "spell" in args.enhance:
                 gemini_query = f"""Fix any spelling errors in this movie search query.
 
                 Only correct obvious typos. Don't change correctly spelled words.
 
-                Query: "{args.query}"
+                Query: "{QUERY}"
 
                 If no errors, return the original query.
                 Corrected:"""
-                client = genai.Client(api_key=api_key)
-                gemini_enhanced_query = client.models.generate_content(model="gemini-2.5-flash", contents=gemini_query)
+                gemini_enhanced_response = client.models.generate_content(model="gemini-2.5-flash", contents=gemini_query)
                 METHOD = args.enhance
                 QUERY = args.query
-                ENHANCED_QUERY = gemini_enhanced_query.text
+                ENHANCED_QUERY = gemini_enhanced_response.text
+                print(f"Enhanced query ({METHOD}): '{QUERY}' -> '{ENHANCED_QUERY}'\n")
+                QUERY = ENHANCED_QUERY
+
+            if "rewrite" in args.enhance:
+                gemini_query = \
+                    f"""Rewrite this movie search query to be more specific and searchable.
+
+                Original: "{QUERY}"
+
+                Consider:
+                - Common movie knowledge (famous actors, popular films)
+                - Genre conventions (horror = scary, animation = cartoon)
+                - Keep it concise (under 10 words)
+                - It should be a google style search query that's very specific
+                - Don't use boolean logic
+
+                Examples:
+
+                - "that bear movie where leo gets attacked" -> "The Revenant Leonardo DiCaprio bear attack"
+                - "movie about bear in london with marmalade" -> "Paddington London marmalade"
+                - "scary movie with bear from few years ago" -> "bear horror movie 2015-2020"
+
+                Rewritten query:"""
+                gemini_enhanced_response = client.models.generate_content(model="gemini-2.5-flash", contents=gemini_query)
+                METHOD = args.enhance
+                ENHANCED_QUERY = gemini_enhanced_response.text
                 print(f"Enhanced query ({METHOD}): '{QUERY}' -> '{ENHANCED_QUERY}'\n")
 
 
