@@ -2,6 +2,12 @@
 import os
 import sys
 import json
+from dotenv import load_dotenv
+
+load_dotenv()
+api_key = os.environ.get("GEMINI_API_KEY")
+from google import genai
+
 
 rootdir = os.path.join(os.path.dirname(__file__),"..")
 sys.path.append(os.path.join(rootdir,'cli','lib'))
@@ -36,6 +42,8 @@ def main() -> None:
     rrf_search_command.add_argument("--k",type=int,help="Number of nearest neighbors to return",default=60)
     rrf_search_command.add_argument("--limit",type=int,help="Limit the number of items to return",default=5)
 
+    rrf_search_command.add_argument("--enhance",type=str,choices=["spell"],help="Query enhancement method")
+
     args = parser.parse_args()
 
 
@@ -58,12 +66,32 @@ def main() -> None:
 
         case "rrf-search":
             hs = HybridSearch(movies())
+            ENHANCED_QUERY = args.query
+            if "spell" in args.enhance:
+                gemini_query = f"""Fix any spelling errors in this movie search query.
+
+                Only correct obvious typos. Don't change correctly spelled words.
+
+                Query: "{args.query}"
+
+                If no errors, return the original query.
+                Corrected:"""
+                client = genai.Client(api_key=api_key)
+                gemini_enhanced_query = client.models.generate_content(model="gemini-2.5-flash", contents=gemini_query)
+                METHOD = args.enhance
+                QUERY = args.query
+                ENHANCED_QUERY = gemini_enhanced_query.text
+                print(f"Enhanced query ({METHOD}): '{QUERY}' -> '{ENHANCED_QUERY}'\n")
+
+
             results = hs.rrf_search(args.query, k=args.k, limit=args.limit)
             for resultcount, result in enumerate(results, start=1):
                 movie_index, scores = result
                 bm25score, semanticscore, rrf_score = scores
                 if semanticscore == None:
                     semanticscore = 0
+
+
                 print(str(resultcount) + ".", movies()[movie_index]["title"])
                 print("   RRF_Score: {:.4f}".format(rrf_score))
                 print("   BM25 Score: {:.4f}".format(bm25score), "Semantic Score {:.4f}".format(semanticscore))
