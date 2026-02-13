@@ -42,7 +42,7 @@ def main() -> None:
     rrf_search_command.add_argument("--k",type=int,help="Number of nearest neighbors to return",default=60)
     rrf_search_command.add_argument("--limit",type=int,help="Limit the number of items to return",default=5)
 
-    rrf_search_command.add_argument("--enhance",type=str,choices=["spell","rewrite"],help="Query enhancement method")
+    rrf_search_command.add_argument("--enhance",type=str,choices=["spell","rewrite","expand"],help="Query enhancement method")
 
     args = parser.parse_args()
 
@@ -67,6 +67,7 @@ def main() -> None:
         case "rrf-search":
             hs = HybridSearch(movies())
             QUERY = args.query
+            ENHANCED_QUERY = QUERY
             client = genai.Client(api_key=api_key)
 
             if "spell" in args.enhance:
@@ -80,12 +81,10 @@ def main() -> None:
                 Corrected:"""
                 gemini_enhanced_response = client.models.generate_content(model="gemini-2.5-flash", contents=gemini_query)
                 METHOD = args.enhance
-                QUERY = args.query
                 ENHANCED_QUERY = gemini_enhanced_response.text
                 print(f"Enhanced query ({METHOD}): '{QUERY}' -> '{ENHANCED_QUERY}'\n")
-                QUERY = ENHANCED_QUERY
 
-            if "rewrite" in args.enhance:
+            elif "rewrite" in args.enhance:
                 gemini_query = \
                     f"""Rewrite this movie search query to be more specific and searchable.
 
@@ -110,18 +109,34 @@ def main() -> None:
                 ENHANCED_QUERY = gemini_enhanced_response.text
                 print(f"Enhanced query ({METHOD}): '{QUERY}' -> '{ENHANCED_QUERY}'\n")
 
+            elif "expand" in args.enhance:
+                gemini_query =f"""Expand this movie search query with related terms.
 
-            results = hs.rrf_search(args.query, k=args.k, limit=args.limit)
+                Add synonyms and related concepts that might appear in movie descriptions.
+                Keep expansions relevant and focused.
+                This will be appended to the original query.
+
+                Examples:
+
+                - "scary bear movie" -> "scary horror grizzly bear movie terrifying film"
+                - "action movie with bear" -> "action thriller bear chase fight adventure"
+                - "comedy with bear" -> "comedy funny bear humor lighthearted"
+
+                Query: "{QUERY}"
+                """
+                gemini_enhanced_response = client.models.generate_content(model="gemini-2.5-flash", contents=gemini_query)
+                METHOD = args.enhance
+                ENHANCED_QUERY = gemini_enhanced_response.text
+                print(f"Enhanced query ({METHOD}): '{QUERY}' -> '{ENHANCED_QUERY}'\n")
+
+            results = hs.rrf_search(ENHANCED_QUERY, k=args.k, limit=args.limit)
             for resultcount, result in enumerate(results, start=1):
                 movie_index, scores = result
                 bm25score, semanticscore, rrf_score = scores
                 if semanticscore == None:
                     semanticscore = 0
 
-
                 print(str(resultcount) + ".", movies()[movie_index]["title"])
-                print("   RRF_Score: {:.4f}".format(rrf_score))
-                print("   BM25 Score: {:.4f}".format(bm25score), "Semantic Score {:.4f}".format(semanticscore))
                 print(movies()[movie_index]["description"][0:100])
         case _:
             parser.print_help()
